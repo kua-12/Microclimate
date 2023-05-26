@@ -1,0 +1,97 @@
+---
+title: "Study_locations_May2023"
+author: "Andrea Ku"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    number_sections: no
+    theme: cerulean
+    toc: yes
+    toc_float: yes
+---
+
+```{r}
+# For data wrangling and map creation
+library(tidyverse)
+library(sf)
+library(tidyr)
+library(here)
+library(mapview)
+
+#For calculating response ratios
+library(metafor)
+library(lme4)
+
+# For response ratio map
+library("rnaturalearth")
+library("rnaturalearthdata")
+library("viridis") 
+```
+
+# Data wrangling and map creation
+```{r}
+# Load data
+data <- read_csv(here("updated_dataset_may2023.csv"))
+glimpse(data)
+
+# Keep data with lat + long coordinates
+locations_df <- data %>%
+  mutate(Lat_Coordinates = as.numeric(Lat_Coordinates),
+         Long_Coordinates = as.numeric(Long_Coordinates)) %>%
+  filter_at(vars(Lat_Coordinates, Long_Coordinates), all_vars(!is.na(.)))
+head(locations_df)
+glimpse(locations_df)
+
+# Convert to spatial feature object
+locations_sf <- st_as_sf(locations_df, 
+                         coords = c("Long_Coordinates", "Lat_Coordinates"),
+                         crs = 4326)
+head(locations_sf)
+
+# Generate map of locations
+mapview(locations_sf, map.types = "Esri.WorldGrayCanvas") 
+```
+
+# Calculate response ratios - Code from NS
+```{r}
+microclim_clean <- read.csv("microclim_clean.csv")
+summary(microclim_clean)
+head(microclim_clean)
+
+# Included 63 studies
+df_uniq <- unique(microclim_clean$unique_id)
+length(df_uniq)
+
+
+microclim_tidy <- microclim_clean %>%
+  select(unique_id, moisture_type_consistent, moisture_units, moisture_open_proportion, moisture_forest_proportion)
+
+microclim_tidy$rr <- log(microclim_tidy$moisture_forest_proportion/microclim_tidy$moisture_open_proportion)
+hist(microclim_tidy$rr)
+
+model <- lmer(rr ~ (1 | unique_id), microclim_tidy)
+summary(model)
+exp(-0.06645)
+
+studyMeans <- microclim_tidy %>% group_by(unique_id) %>% summarise(meanRR = mean(rr))
+
+```
+
+# Create map colored by response ratios
+```{r}
+rr_df <- read.csv("coords_resp_ratio.csv")
+head(rr_df)
+
+world <- ne_countries(scale = "medium", returnclass = "sf")
+class(world)
+
+ggplot(data = world) +
+    geom_sf()+
+    geom_point(data = rr_df, 
+               aes(x = Long_Coordinates, y = Lat_Coordinates, colour = meanRR), 
+               size=2, alpha=0.6)+ 
+    scale_color_viridis(option = "D")+
+  theme_bw()
+
+```
