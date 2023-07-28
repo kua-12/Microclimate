@@ -37,6 +37,7 @@ write.csv(microclim, "updated_dataset_july2023_withRR.csv")
 
 ### fit a very simple LMER to predict response ratio with a random effect for study
 library(lme4)
+library(lmerTest)
 
 simp_mod <- with(microclim_tidy, lmer(rr ~ 1|unique_id))
 summary(simp_mod)
